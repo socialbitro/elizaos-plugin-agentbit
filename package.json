@@ -1,0 +1,62 @@
+{
+  "name": "elizaos-plugin-agentbit",
+  "version": "0.1.0",
+  "description": "elizaOS plugin for the AgentBIT Router — give your agent one action that runs any of 14,000+ x402 tools and returns the result. Pay-per-call in USDC on Base.",
+  "keywords": [
+    "elizaos",
+    "eliza",
+    "plugin",
+    "x402",
+    "base",
+    "ai-agent",
+    "agent",
+    "router",
+    "mcp",
+    "usdc",
+    "onchain"
+  ],
+  "homepage": "https://agentbit.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/socialbitro/agentbit-mcp"
+  },
+  "license": "MIT",
+  "author": "AgentBIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "@elizaos/core": ">=0.1.7"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@elizaos/core": "^0.1.7",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
