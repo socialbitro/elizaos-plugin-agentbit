@@ -73,6 +73,12 @@ console.log(result.ok, result.paidUsdc, result.data);
 
 Learn more at **[agentbit.app](https://agentbit.app)** · [Router](https://agentbit.app/router) · [Integrations](https://agentbit.app/integrations)
 
+## Security
+
+- The agent's private key is used **only** to sign the EIP-3009 `TransferWithAuthorization` locally, in-process, via [`viem`](https://viem.sh) — see [`src/x402.ts`](src/x402.ts).
+- The key is **never transmitted** to AgentBIT and **never logged**. Only the resulting signed payment payload (signature + authorization) is sent over the wire, exactly as the x402 protocol requires.
+- No API key, no signup, no server-side custody of funds. The agent pays from its own wallet and you set an optional per-call cap with `AGENTBIT_MAX_USDC`.
+
 ## License
 
 MIT © AgentBIT
