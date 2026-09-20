@@ -1,6 +1,6 @@
 {
   "name": "elizaos-plugin-agentbit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "elizaOS plugin for the AgentBIT Router — give your agent one action that runs any of 14,000+ x402 tools and returns the result. Pay-per-call in USDC on Base.",
   "keywords": [
     "elizaos",
@@ -18,7 +18,7 @@
   "homepage": "https://agentbit.app",
   "repository": {
     "type": "git",
-    "url": "https://github.com/socialbitro/agentbit-mcp"
+    "url": "git+https://github.com/socialbitro/elizaos-plugin-agentbit.git"
   },
   "license": "MIT",
   "author": "AgentBIT",
