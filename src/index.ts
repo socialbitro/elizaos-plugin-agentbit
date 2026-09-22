@@ -158,23 +158,23 @@ const routeAction: Action = {
   },
   examples: [
     [
-      { name: "{{user1}}", content: { text: "What's the current Ethereum gas price?" } },
+      { user: "{{user1}}", content: { text: "What's the current Ethereum gas price?" } },
       {
-        name: "{{agent}}",
+        user: "{{agent}}",
         content: { text: "Let me fetch that via AgentBIT.", action: "AGENTBIT_ROUTE" },
       },
     ],
     [
-      { name: "{{user1}}", content: { text: "Screen wallet 0x1234…abcd for sanctions." } },
+      { user: "{{user1}}", content: { text: "Screen wallet 0x1234…abcd for sanctions." } },
       {
-        name: "{{agent}}",
+        user: "{{agent}}",
         content: { text: "Running a sanctions screen through AgentBIT.", action: "AGENTBIT_ROUTE" },
       },
     ],
     [
-      { name: "{{user1}}", content: { text: "Extract the main article text from https://example.com/post" } },
+      { user: "{{user1}}", content: { text: "Extract the main article text from https://example.com/post" } },
       {
-        name: "{{agent}}",
+        user: "{{agent}}",
         content: { text: "I'll route that to a web-extraction tool via AgentBIT.", action: "AGENTBIT_ROUTE" },
       },
     ],
@@ -209,9 +209,9 @@ const discoverAction: Action = {
   },
   examples: [
     [
-      { name: "{{user1}}", content: { text: "What x402 tools are there for blockchain data?" } },
+      { user: "{{user1}}", content: { text: "What x402 tools are there for blockchain data?" } },
       {
-        name: "{{agent}}",
+        user: "{{agent}}",
         content: { text: "Let me search AgentBIT for matching tools.", action: "AGENTBIT_DISCOVER" },
       },
     ],
