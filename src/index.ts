@@ -39,23 +39,50 @@ function setting(runtime: IAgentRuntime, key: string): string | undefined {
   return env?.[key];
 }
 
-function walletKey(runtime: IAgentRuntime): string | undefined {
-  return (
-    setting(runtime, "AGENTBIT_WALLET_PRIVATE_KEY") ??
-    setting(runtime, "EVM_PRIVATE_KEY") ??
-    setting(runtime, "WALLET_PRIVATE_KEY")
-  );
+/** Default per-call spend cap (USDC) when AGENTBIT_MAX_USDC is not set — the cap is
+ *  DEFAULT-ON so a misconfigured or spoofed router can never sign an unbounded amount. */
+const DEFAULT_MAX_USDC = 0.05;
+
+/**
+ * Resolve the signing key with an explicit-opt-in policy:
+ *  - AGENTBIT_WALLET_PRIVATE_KEY (a dedicated key) is always allowed.
+ *  - The agent's SHARED keys (EVM_PRIVATE_KEY / WALLET_PRIVATE_KEY) are used ONLY when
+ *    the operator explicitly opts in by setting AGENTBIT_MAX_USDC — otherwise registering
+ *    this plugin must not silently turn the agent's treasury key into a payer.
+ */
+function resolveKey(runtime: IAgentRuntime): { key?: string; error?: string } {
+  const dedicated = setting(runtime, "AGENTBIT_WALLET_PRIVATE_KEY");
+  if (dedicated) {
+    return { key: dedicated };
+  }
+  const shared = setting(runtime, "EVM_PRIVATE_KEY") ?? setting(runtime, "WALLET_PRIVATE_KEY");
+  if (!shared) {
+    return {};
+  }
+  if (setting(runtime, "AGENTBIT_MAX_USDC") === undefined) {
+    return {
+      error:
+        "AgentBIT refuses to spend from the agent's shared EVM_PRIVATE_KEY/WALLET_PRIVATE_KEY without an explicit opt-in. " +
+        "Set AGENTBIT_WALLET_PRIVATE_KEY (a dedicated key funded with a little USDC on Base), or set AGENTBIT_MAX_USDC to opt in.",
+    };
+  }
+  return { key: shared };
 }
 
 function baseUrl(runtime: IAgentRuntime): string {
   return setting(runtime, "AGENTBIT_BASE_URL") ?? "https://agentbit.app";
 }
 
-function maxUsdc(runtime: IAgentRuntime): number | undefined {
+/** Per-call spend cap in USDC. Default-on at DEFAULT_MAX_USDC unless overridden. */
+function maxUsdc(runtime: IAgentRuntime): number {
   const raw = setting(runtime, "AGENTBIT_MAX_USDC");
-  if (raw === undefined) return undefined;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : undefined;
+  const n = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_MAX_USDC;
+}
+
+/** Only pin to USDC-on-Base off when the operator explicitly allows any asset/chain. */
+function allowAnyAsset(runtime: IAgentRuntime): boolean {
+  return (setting(runtime, "AGENTBIT_ALLOW_ANY_ASSET") ?? "").toLowerCase() === "true";
 }
 
 const routeAction: Action = {
@@ -71,8 +98,9 @@ const routeAction: Action = {
   description:
     "Run the single best x402 tool for a task across the whole ecosystem (14,000+ tools, including external sellers) and return the result. Use this whenever no built-in action/tool covers what the user needs — e.g. real-time or on-chain data, web extraction, wallet/sanctions screening, specialized computation. Pays per call in USDC on Base automatically from the agent's own wallet.",
   validate: async (runtime: IAgentRuntime, _message: Memory): Promise<boolean> => {
-    // Only available when a wallet key is configured to sign the payment.
-    return Boolean(walletKey(runtime));
+    // Available only when a usable signing key is configured under the opt-in policy
+    // (a dedicated AGENTBIT_WALLET_PRIVATE_KEY, or a shared key WITH an explicit cap).
+    return Boolean(resolveKey(runtime).key);
   },
   handler: async (
     runtime: IAgentRuntime,
@@ -81,10 +109,15 @@ const routeAction: Action = {
     _options: { [key: string]: unknown } | undefined,
     callback?: HandlerCallback,
   ): Promise<boolean> => {
-    const privateKey = walletKey(runtime);
+    const resolved = resolveKey(runtime);
+    if (resolved.error) {
+      await callback?.({ text: resolved.error });
+      return false;
+    }
+    const privateKey = resolved.key;
     if (!privateKey) {
       await callback?.({
-        text: "AgentBIT is not configured: set AGENTBIT_WALLET_PRIVATE_KEY (an EVM key with a little USDC on Base).",
+        text: "AgentBIT is not configured: set AGENTBIT_WALLET_PRIVATE_KEY (a dedicated EVM key with a little USDC on Base).",
       });
       return false;
     }
@@ -107,6 +140,7 @@ const routeAction: Action = {
         resource,
         body,
         maxAmountUsdc: maxUsdc(runtime),
+        allowAnyAsset: allowAnyAsset(runtime),
       });
 
       const payload = typeof result.data === "string" ? result.data : JSON.stringify(result.data);
@@ -124,23 +158,23 @@ const routeAction: Action = {
   },
   examples: [
     [
-      { user: "{{user1}}", content: { text: "What's the current Ethereum gas price?" } },
+      { name: "{{user1}}", content: { text: "What's the current Ethereum gas price?" } },
       {
-        user: "{{agent}}",
+        name: "{{agent}}",
         content: { text: "Let me fetch that via AgentBIT.", action: "AGENTBIT_ROUTE" },
       },
     ],
     [
-      { user: "{{user1}}", content: { text: "Screen wallet 0x1234…abcd for sanctions." } },
+      { name: "{{user1}}", content: { text: "Screen wallet 0x1234…abcd for sanctions." } },
       {
-        user: "{{agent}}",
+        name: "{{agent}}",
         content: { text: "Running a sanctions screen through AgentBIT.", action: "AGENTBIT_ROUTE" },
       },
     ],
     [
-      { user: "{{user1}}", content: { text: "Extract the main article text from https://example.com/post" } },
+      { name: "{{user1}}", content: { text: "Extract the main article text from https://example.com/post" } },
       {
-        user: "{{agent}}",
+        name: "{{agent}}",
         content: { text: "I'll route that to a web-extraction tool via AgentBIT.", action: "AGENTBIT_ROUTE" },
       },
     ],
@@ -175,9 +209,9 @@ const discoverAction: Action = {
   },
   examples: [
     [
-      { user: "{{user1}}", content: { text: "What x402 tools are there for blockchain data?" } },
+      { name: "{{user1}}", content: { text: "What x402 tools are there for blockchain data?" } },
       {
-        user: "{{agent}}",
+        name: "{{agent}}",
         content: { text: "Let me search AgentBIT for matching tools.", action: "AGENTBIT_DISCOVER" },
       },
     ],

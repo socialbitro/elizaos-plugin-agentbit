@@ -35,7 +35,19 @@ export interface RouteParams {
   body?: Record<string, unknown>;
   /** Per-call spend cap in USDC. If the priced route exceeds it, refuse to pay. */
   maxAmountUsdc?: number;
+  /**
+   * By default the client only signs payments in USDC on Base (`eip155:8453`) — a
+   * compromised/spoofed router cannot make it sign a different token or chain. Set true
+   * to allow any asset/chain the 402 names (not recommended).
+   */
+  allowAnyAsset?: boolean;
 }
+
+/** USDC on Base (eip155:8453) — the only asset/chain paid unless allowAnyAsset is set. */
+const BASE_CHAIN = "eip155:8453";
+const BASE_USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+/** Hard ceiling on the authorization window (seconds) regardless of what the 402 names. */
+const MAX_VALID_SECONDS = 600;
 
 export interface RouteResult {
   ok: boolean;
@@ -118,11 +130,22 @@ export async function routeExecute(params: RouteParams): Promise<RouteResult> {
     return { ok: false, data: null, paidUsdc: 0, message: `Could not read payment requirements: ${errMsg(e)}` };
   }
 
-  const req = (required.accepts ?? []).find(
-    (a: any) => (a.scheme ?? "exact") === "exact" && String(a.network ?? "").startsWith("eip155:"),
-  );
+  // Pick a payable option, and by default ONLY USDC on Base — never sign whatever
+  // asset/chain a (possibly spoofed) router names.
+  const req = (required.accepts ?? []).find((a: any) => {
+    if ((a.scheme ?? "exact") !== "exact") return false;
+    if (params.allowAnyAsset) return String(a.network ?? "").startsWith("eip155:");
+    return String(a.network ?? "") === BASE_CHAIN && String(a.asset ?? "").toLowerCase() === BASE_USDC;
+  });
   if (!req) {
-    return { ok: false, data: null, paidUsdc: 0, message: "Router returned no payable (exact/EVM) option." };
+    return {
+      ok: false,
+      data: null,
+      paidUsdc: 0,
+      message: params.allowAnyAsset
+        ? "Router returned no payable (exact/EVM) option."
+        : "Router returned no USDC-on-Base option (set allowAnyAsset to accept other assets/chains).",
+    };
   }
 
   const amount = String(req.amount ?? req.maxAmountRequired ?? "0");
@@ -131,23 +154,27 @@ export async function routeExecute(params: RouteParams): Promise<RouteResult> {
   }
   const amountUsdc = Number(amount) / 1_000_000;
 
-  if (params.maxAmountUsdc !== undefined && amountUsdc > params.maxAmountUsdc) {
+  // Default-ON per-call cap: never sign an unbounded amount even if the caller passed none.
+  const cap = params.maxAmountUsdc !== undefined && params.maxAmountUsdc > 0 ? params.maxAmountUsdc : 0.05;
+  if (amountUsdc > cap) {
     return {
       ok: false,
       data: null,
       paidUsdc: 0,
-      message: `Route price ${amountUsdc} USDC exceeds the cap of ${params.maxAmountUsdc} USDC — not paid.`,
+      message: `Route price ${amountUsdc} USDC exceeds the cap of ${cap} USDC — not paid.`,
     };
   }
 
-  // 2) sign an EIP-3009 authorization with the agent's wallet
+  // 2) sign an EIP-3009 authorization with the agent's wallet.
+  // Bound the authorization window regardless of what the 402 names.
   const now = Math.floor(Date.now() / 1000);
+  const ttl = Math.min(Math.max(Number(req.maxTimeoutSeconds ?? 300) || 300, 1), MAX_VALID_SECONDS);
   const authorization = {
     from: buyer,
     to: String(req.payTo),
     value: amount,
     validAfter: String(now - 60),
-    validBefore: String(now + Number(req.maxTimeoutSeconds ?? 300)),
+    validBefore: String(now + ttl),
     nonce: randomNonce(),
   };
   const chainId = Number(String(req.network).split(":")[1] ?? 0);

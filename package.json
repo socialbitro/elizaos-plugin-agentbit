@@ -1,6 +1,6 @@
 {
   "name": "elizaos-plugin-agentbit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "elizaOS plugin for the AgentBIT Router — give your agent one action that runs any of 14,000+ x402 tools and returns the result. Pay-per-call in USDC on Base.",
   "keywords": [
     "elizaos",
